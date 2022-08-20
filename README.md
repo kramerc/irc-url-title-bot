@@ -38,14 +38,14 @@ A full-fledged real-world example is also
 ```yaml
 # Mandatory:
 host: irc.libera.chat
-ssl_port: 6697
+port: 6697
+ssl: true
 nick: MyTitleBot
 channels:
   - '#some_chan1'
-  - '##some_chan2'
+  - '##some_chan2 somekey'
 
 # Optional:
-alerts_channel: '#mybot-alerts'
 blacklist:
   title:
     - Invalid host
@@ -89,16 +89,11 @@ sites:
 
 ##### Mandatory
 * **`host`**
-* **`ssl_port`**
+* **`port`**
 * **`nick`**
 * **`channels`**
 
 ##### Optional
-* **`alerts_channel`**: Some but not all warning and error alerts are sent to this channel.
-Its default value is `##{nick}-alerts`. The key `{nick}`, if present in the value, is formatted with the actual nick.
-For example, if the nick is `MyTitleBot`, alerts will by default be sent to `##MyTitleBot-alerts`.
-Since a channel name starts with #, the name if provided **must be quoted**.
-It is recommended that the alerts channel be registered and monitored.
 * **`blacklist.title`**: This is a list of strings. If a title is one of these strings, it is not posted.
 The comparison is case insensitive.
 * **`blacklist.url`**: This is a list of strings. If a URL is one of these strings, its title is not posted.

@@ -31,16 +31,9 @@ def load_config() -> None:
     for site, site_config in instance_config.get("sites", {}).items():
         log.info("User configuration for site %s is: %s", site, site_config)
 
-    # Set alerts channel
-    if "alerts_channel" not in instance_config:
-        instance_config["alerts_channel"] = config.ALERTS_CHANNEL_FORMAT_DEFAULT
-    instance_config["alerts_channel"] = instance_config["alerts_channel"].format(nick=instance_config["nick"])
-    if instance_config["alerts_channel"] not in instance_config["channels"]:
-        instance_config["channels"].append(instance_config["alerts_channel"])
-
     # Process user config
     instance_config["nick:casefold"] = instance_config["nick"].casefold()
-    instance_config["channels:casefold"] = [channel.casefold() for channel in instance_config["channels"]]
+    instance_config["channels:casefold"] = [channel.casefold().split(' ')[0] for channel in instance_config["channels"]]
     instance_config["ignores:casefold"] = [ignore.casefold() for ignore in instance_config.get("ignores", [])]
 
     # Process blacklist

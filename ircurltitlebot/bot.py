@@ -26,7 +26,6 @@ url_extractor = urlextract.URLExtract()  # pylint: disable=invalid-name
 
 def _alert(irc: miniirc.IRC, msg: str, loglevel: int = logging.ERROR) -> None:
     log.log(loglevel, msg)
-    irc.msg(config.INSTANCE["alerts_channel"], msg)
 
 
 class Bot:
@@ -43,19 +42,18 @@ class Bot:
         log.debug("Initializing IRC client.")
         self._irc = miniirc.IRC(
             ip=instance["host"],
-            port=instance["ssl_port"],
+            port=instance["port"],
             nick=instance["nick"],
             channels=instance["channels"],
-            ssl=True,
+            ssl=instance["ssl"],
             debug=False,
-            ns_identity=(instance["nick"], os.environ["IRC_PASSWORD"]),
+            ns_identity=(instance["nick"], ""),
             connect_modes=instance.get("mode"),
             quit_message="",
         )
         log.info("Initialized IRC client.")
 
         self._setup_channel_threads()  # Threads require IRC client.
-        log.info("Alerts will be sent to %s.", config.INSTANCE["alerts_channel"])
 
         while True:  # This is intended to prevent a concurrent.futures error.
             time.sleep(1234567890)
@@ -63,12 +61,13 @@ class Bot:
     def _msg_channel(self, channel: str) -> NoReturn:  # pylint: disable=too-many-locals
         instance = config.INSTANCE
         irc = self._irc
-        channel_queue = Bot.QUEUES[channel]
+        channel_name = channel.split(' ', 1)[0]
+        channel_queue = Bot.QUEUES[channel_name]
         title_timeout = config.TITLE_TIMEOUT
         title_prefix = config.TITLE_PREFIX
         title_blacklist = instance["blacklist"]["title"]
         active_count = threading.active_count
-        log.debug("Starting titles handler for %s.", channel)
+        log.debug("Starting titles handler for %s.", channel_name)
         while True:
             url_future = channel_queue.get()
             start_time = time.monotonic()
@@ -76,22 +75,22 @@ class Bot:
                 result = url_future.result(timeout=title_timeout)
             except concurrent.futures.TimeoutError:
                 time_used = time.monotonic() - start_time
-                msg = f"Result for {channel} timed out after {time_used:.1f}s."
+                msg = f"Result for {channel_name} timed out after {time_used:.1f}s."
                 _alert(irc, msg)
             else:
                 if result is None:
                     continue
                 user, url, title = result
                 if title.casefold() in title_blacklist:
-                    log.info("Skipping globally blacklisted title %s for %s in %s for URL %s", repr(title), user, channel, url)
+                    log.info("Skipping globally blacklisted title %s for %s in %s for URL %s", repr(title), user, channel_name, url)
                     continue
                 msg = f"{title_prefix} {title}"
                 if irc.connected:
-                    irc.msg(channel, msg)
+                    irc.msg(channel_name, msg)
                     log.info(
                         "Sent outgoing message for %s in %s in %.1fs having content %s for URL %s with %s active threads.",
                         user,
-                        channel,
+                        channel_name,
                         time.monotonic() - start_time,
                         repr(msg),
                         url,
@@ -101,7 +100,7 @@ class Bot:
                     log.warning(
                         "Skipped outgoing message for %s in %s in %.1fs having content %s for URL %s with %s active threads because the IRC client is not connected.",
                         user,
-                        channel,
+                        channel_name,
                         time.monotonic() - start_time,
                         repr(msg),
                         url,
@@ -110,10 +109,18 @@ class Bot:
 
     def _setup_channel_queues(self) -> None:
         channels = config.INSTANCE["channels"]
-        channels_str = ", ".join(channels)
-        active_count = threading.active_count
-        log.debug("Setting up executor and queue for %s channels (%s) with %s currently active threads.", len(channels), channels_str, active_count())
+
+        # Drop channel keys.
+        names = []
         for channel in channels:
+            name = channel.split(' ', 1)[0]
+            if name:
+                names.append(name)
+
+        channels_str = ", ".join(names)
+        active_count = threading.active_count
+        log.debug("Setting up executor and queue for %s channels (%s) with %s currently active threads.", len(names), channels_str, active_count())
+        for channel in names:
             log.debug("Setting up executor and queue for %s.", channel)
             self.EXECUTORS[channel] = concurrent.futures.ThreadPoolExecutor(max_workers=config.MAX_WORKERS_PER_CHANNEL, thread_name_prefix=f"TitleReader-{channel}")
             self.QUEUES[channel] = queue.SimpleQueue()
@@ -132,11 +139,12 @@ class Bot:
 
 def _get_title(irc: miniirc.IRC, channel: str, user: str, url: str) -> Optional[Tuple[str, str, str]]:
     start_time = time.monotonic()
+    channel_name = channel.split(' ')[0]
     try:
-        title = url_title_reader.title(url, channel)
+        title = url_title_reader.title(url, channel_name)
     except Exception as exc:  # pylint: disable=broad-except
         time_used = time.monotonic() - start_time
-        msg = f"Error retrieving title for URL in message from {user} in {channel} in {time_used:.1f}s: {exc}"
+        msg = f"Error retrieving title for URL in message from {user} in {channel_name} in {time_used:.1f}s: {exc}"
         # Note: exc almost always includes the actual URL, so it need not be duplicated in the alert.
         if url.endswith(PUNCTUATION):
             period = "" if msg.endswith(".") else "."
@@ -145,10 +153,10 @@ def _get_title(irc: miniirc.IRC, channel: str, user: str, url: str) -> Optional[
         else:
             _alert(irc, msg)
         if url.endswith(PUNCTUATION):
-            return _get_title(irc, channel, user, url[:-1])
+            return _get_title(irc, channel_name, user, url[:-1])
     else:
         if title:  # Filter out None or blank title.
-            log.debug('Returning title "%s" for URL %s in message from %s in %s in %.1fs.', title, url, user, channel, time.monotonic() - start_time)
+            log.debug('Returning title "%s" for URL %s in message from %s in %s in %.1fs.', title, url, user, channel_name, time.monotonic() - start_time)
             return user, url, title
     return None
 
@@ -199,7 +207,6 @@ def _handle_privmsg(irc: miniirc.IRC, hostmask: Tuple[str, str, str], args: List
     if user.casefold() in config.INSTANCE["ignores:casefold"]:
         return
     if channel.casefold() not in config.INSTANCE["channels:casefold"]:
-        assert channel.casefold() == config.INSTANCE["nick:casefold"]
         if msg != "\x01VERSION\x01":
             # Ignoring private message from freenode-connect having ident frigg
             # and hostname freenode/utility-bot/frigg: VERSION
