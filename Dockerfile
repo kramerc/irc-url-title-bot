@@ -5,8 +5,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN set -x && \
     sed -i 's/@SECLEVEL=2/@SECLEVEL=1/' /etc/ssl/openssl.cnf && \
+    apt-get update && apt-get -y install git && \
     pip install --no-cache-dir -U pip wheel && \
-    pip install --no-cache-dir -r ./requirements.txt
+    pip install --no-cache-dir -r ./requirements.txt && \
+    apt-get autoremove --purge -y git
 # Note: Regarding SECLEVEL, see https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=927461
 # Lowering the SECLEVEL causes more https certificates to be valid.
 COPY ircurltitlebot ircurltitlebot
