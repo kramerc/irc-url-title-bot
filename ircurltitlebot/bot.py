@@ -33,8 +33,11 @@ class Bot:
 
     EXECUTORS: Dict[str, concurrent.futures.ThreadPoolExecutor] = {}
     QUEUES: Dict[str, queue.SimpleQueue] = {}
+    THREADS: Dict[str, threading.Thread] = {}
 
     def __init__(self) -> None:
+        self._closing = False
+
         try:
             log.info("Initializing bot as: %s", subprocess.check_output("id", text=True).rstrip())  # pylint: disable=unexpected-keyword-arg
         except FileNotFoundError:
@@ -61,7 +64,27 @@ class Bot:
         self._setup_channel_threads()  # Threads require IRC client.
 
         while True:  # This is intended to prevent a concurrent.futures error.
-            time.sleep(1234567890)
+            try:
+                time.sleep(5)
+            except KeyboardInterrupt:
+                log.info("Received KeyboardInterrupt. Exiting...")
+                self.close()
+
+    def close(self) -> None:
+        self._closing = True
+        self._irc.disconnect(auto_reconnect=False)
+        self._irc.wait_until_disconnected()
+        log.info("Disconnected from IRC.")
+        for q in self.QUEUES.values():
+            q.put(None)
+        log.debug("Flushed queues.")
+        for e in self.EXECUTORS.values():
+            e.shutdown()
+        log.debug("Shut down executors.")
+        for t in self.THREADS.values():
+            t.join()
+        log.debug("Joined threads.")
+        exit(0)
 
     def _msg_channel(self, channel: str) -> NoReturn:  # pylint: disable=too-many-locals
         instance = config.INSTANCE
@@ -74,10 +97,15 @@ class Bot:
         active_count = threading.active_count
         log.debug("Starting titles handler for %s.", channel_name)
         while True:
+            if self._closing:
+                break
+
             url_future = channel_queue.get()
             start_time = time.monotonic()
             try:
-                result = url_future.result(timeout=title_timeout)
+                result = None
+                if url_future is not None:
+                    result = url_future.result(timeout=title_timeout)
             except concurrent.futures.TimeoutError:
                 time_used = time.monotonic() - start_time
                 msg = f"Result for {channel_name} timed out after {time_used:.1f}s."
@@ -138,7 +166,8 @@ class Bot:
         active_count = threading.active_count
         log.debug("Setting up thread for %s channels (%s) with %s currently active threads.", len(channels), channels_str, active_count())
         for channel in channels:
-            threading.Thread(target=self._msg_channel, name=f"ChannelMessenger-{channel}", args=(channel,)).start()
+            self.THREADS[channel] = threading.Thread(target=self._msg_channel, name=f"ChannelMessenger-{channel}", args=(channel,))
+            self.THREADS[channel].start()
         log.info("Finished setting up thread for %s channels (%s) with %s currently active threads.", len(channels), channels_str, active_count())
 
 
