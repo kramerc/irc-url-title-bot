@@ -35,7 +35,12 @@ class Bot:
     QUEUES: Dict[str, queue.SimpleQueue] = {}
 
     def __init__(self) -> None:
-        log.info("Initializing bot as: %s", subprocess.check_output("id", text=True).rstrip())  # pylint: disable=unexpected-keyword-arg
+        try:
+            log.info("Initializing bot as: %s", subprocess.check_output("id", text=True).rstrip())  # pylint: disable=unexpected-keyword-arg
+        except FileNotFoundError:
+            # "id" command doesn't exist
+            pass
+
         instance = config.INSTANCE
         self._setup_channel_queues()  # Sets up executors and queues required by IRC handler.
 
