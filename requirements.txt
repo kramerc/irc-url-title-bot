@@ -32,7 +32,7 @@ pillow==10.1.0
     # via pikepdf
 platformdirs==4.1.0
     # via urlextract
-ruamel-yaml==0.18.5
+ruamel-yaml==0.18.6
     # via -r requirements.in
 ruamel-yaml-clib==0.2.8
     # via ruamel-yaml
