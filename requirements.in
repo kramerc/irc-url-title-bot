@@ -2,4 +2,4 @@ ircstyle
 git+https://github.com/kramerc/miniirc.git@master#egg=miniirc # https://github.com/luk3yx/miniirc/blob/master/CHANGELOG.md
 ruamel.yaml
 urlextract # https://github.com/lipoja/URLExtract/blob/master/CHANGELOG.rst
-urltitle
+git+https://github.com/kramerc/urltitle.git@master#egg=urltitle

@@ -42,7 +42,7 @@ uritools==4.0.2
     # via urlextract
 urlextract==1.9.0
     # via -r requirements.in
-urltitle==0.3.8
+urltitle @ git+https://github.com/kramerc/urltitle.git@master
     # via -r requirements.in
 wrapt==1.16.0
     # via deprecated
