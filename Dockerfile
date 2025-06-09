@@ -1,4 +1,4 @@
-FROM python:3.13.3-slim-bookworm AS build
+FROM python:3.13.4-slim-bookworm AS build
 WORKDIR /app
 COPY requirements.in .
 RUN set -x && \
