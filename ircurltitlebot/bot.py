@@ -55,7 +55,7 @@ class Bot:
             channels=instance["channels"],
             ssl=instance["ssl"],
             debug=False,
-            ns_identity=(instance["nick"], ""),
+            ns_identity=(instance["nick"], os.environ["IRC_PASSWORD"]),
             connect_modes=instance.get("mode"),
             quit_message="",
         )
